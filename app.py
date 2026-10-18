@@ -1,18 +1,20 @@
 import ast
 import math
-import random
 import operator
+import random
+import io
 
-import streamlit as st
+import numpy as np
 import pandas as pd
+import streamlit as st
 
 
 # =========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
-    page_title="Tom Lab | Math & Pokémon",
+    page_title="Tom Lab | Interactive STEM",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -20,15 +22,14 @@ st.set_page_config(
 
 
 # =========================================================
-# DESIGN
+# CUSTOM STYLE
 # =========================================================
 
 st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(145deg, #0b1020 0%, #111a30 100%);
-        color: #f1f5f9;
+        background: linear-gradient(145deg, #0b1020, #111b31);
     }
 
     h1, h2, h3 {
@@ -36,29 +37,28 @@ st.markdown(
     }
 
     div[data-testid="stMetric"] {
-        background: rgba(30, 41, 59, 0.8);
-        padding: 15px;
-        border-radius: 12px;
+        background: rgba(30, 41, 59, 0.85);
         border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 14px;
     }
 
     div.stButton > button {
         border-radius: 10px;
-        border: 1px solid #22d3ee;
         font-weight: 600;
+        border: 1px solid #22d3ee;
     }
 
     .lab-card {
+        background: rgba(30, 41, 59, 0.7);
         padding: 18px;
-        border-radius: 14px;
-        background: rgba(30, 41, 59, 0.65);
         border: 1px solid #334155;
-        margin-bottom: 12px;
+        border-radius: 14px;
+        margin-bottom: 10px;
     }
 
-    .small-note {
+    .muted {
         color: #cbd5e1;
-        font-size: 0.9rem;
     }
     </style>
     """,
@@ -70,42 +70,20 @@ st.markdown(
 # SESSION STATE
 # =========================================================
 
-if "notes" not in st.session_state:
-    st.session_state.notes = []
+defaults = {
+    "notes": [],
+    "math_result": None,
+    "challenge_index": None,
+    "monte_carlo_result": None,
+}
 
-if "challenge" not in st.session_state:
-    st.session_state.challenge = None
-
-if "challenge_answer" not in st.session_state:
-    st.session_state.challenge_answer = None
-
-if "challenge_hint" not in st.session_state:
-    st.session_state.challenge_hint = None
-
-if "challenge_solution" not in st.session_state:
-    st.session_state.challenge_solution = None
-
-if "math_result" not in st.session_state:
-    st.session_state.math_result = None
-
-if "type_result" not in st.session_state:
-    st.session_state.type_result = None
-
-if "voltage_result" not in st.session_state:
-    st.session_state.voltage_result = None
-
-if "catch_result" not in st.session_state:
-    st.session_state.catch_result = None
-
-if "cp_result" not in st.session_state:
-    st.session_state.cp_result = None
-
-if "constant_result" not in st.session_state:
-    st.session_state.constant_result = None
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 
 # =========================================================
-# SAFE MATHEMATICAL EXPRESSION EVALUATOR
+# SAFE MATHEMATICS ENGINE
 # =========================================================
 
 BINARY_OPERATORS = {
@@ -122,7 +100,7 @@ UNARY_OPERATORS = {
     ast.USub: operator.neg,
 }
 
-MATH_FUNCTIONS = {
+FUNCTIONS = {
     "sqrt": math.sqrt,
     "sin": math.sin,
     "cos": math.cos,
@@ -134,62 +112,74 @@ MATH_FUNCTIONS = {
     "floor": math.floor,
     "ceil": math.ceil,
     "abs": abs,
-    "round": round,
 }
 
-MATH_CONSTANTS = {
+CONSTANTS = {
     "pi": math.pi,
     "e": math.e,
 }
 
 
 def safe_calculate(expression):
-    """Evaluate a restricted mathematical expression without eval()."""
+    """Evaluate a restricted arithmetic expression without eval()."""
 
     if len(expression) > 200:
         raise ValueError("Expression is too long.")
 
     tree = ast.parse(expression, mode="eval")
 
-    def evaluate(node, depth=0):
+    def visit(node, depth=0):
         if depth > 30:
             raise ValueError("Expression is too complex.")
 
         if isinstance(node, ast.Expression):
-            return evaluate(node.body, depth + 1)
+            return visit(node.body, depth + 1)
 
         if isinstance(node, ast.Constant):
             if type(node.value) not in (int, float):
-                raise ValueError("Only numbers are allowed.")
+                raise ValueError("Only numeric values are allowed.")
+
             if abs(node.value) > 1e100:
                 raise ValueError("Number is too large.")
+
             return node.value
 
         if isinstance(node, ast.Name):
-            if node.id in MATH_CONSTANTS:
-                return MATH_CONSTANTS[node.id]
-            raise ValueError(f"Unknown name: {node.id}")
+            if node.id in CONSTANTS:
+                return CONSTANTS[node.id]
+
+            raise ValueError("Unknown constant.")
+
+        if isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+
+            if op_type not in UNARY_OPERATORS:
+                raise ValueError("Unsupported unary operator.")
+
+            return UNARY_OPERATORS[op_type](
+                visit(node.operand, depth + 1)
+            )
 
         if isinstance(node, ast.BinOp):
-            operator_type = type(node.op)
+            op_type = type(node.op)
 
-            if operator_type not in BINARY_OPERATORS:
-                raise ValueError("Operator is not supported.")
+            if op_type not in BINARY_OPERATORS:
+                raise ValueError("Unsupported operator.")
 
-            left = evaluate(node.left, depth + 1)
-            right = evaluate(node.right, depth + 1)
+            left = visit(node.left, depth + 1)
+            right = visit(node.right, depth + 1)
 
-            if operator_type is ast.Pow:
-                if abs(right) > 1000:
+            if op_type is ast.Pow:
+                if abs(right) > 100:
                     raise ValueError("Exponent is too large.")
 
-                if abs(left) > 1e100:
+                if abs(left) > 1e50:
                     raise ValueError("Base is too large.")
 
-            result = BINARY_OPERATORS[operator_type](left, right)
+            result = BINARY_OPERATORS[op_type](left, right)
 
             if isinstance(result, complex):
-                raise ValueError("Complex results are not supported.")
+                raise ValueError("Complex numbers are not supported.")
 
             if not math.isfinite(float(result)):
                 raise ValueError("Result is not finite.")
@@ -199,48 +189,33 @@ def safe_calculate(expression):
 
             return result
 
-        if isinstance(node, ast.UnaryOp):
-            operator_type = type(node.op)
-
-            if operator_type not in UNARY_OPERATORS:
-                raise ValueError("Unary operator is not supported.")
-
-            return UNARY_OPERATORS[operator_type](
-                evaluate(node.operand, depth + 1)
-            )
-
         if isinstance(node, ast.Call):
             if not isinstance(node.func, ast.Name):
-                raise ValueError("Only approved math functions are allowed.")
+                raise ValueError("Only approved functions are allowed.")
 
-            function_name = node.func.id
+            name = node.func.id
 
-            if function_name not in MATH_FUNCTIONS:
-                raise ValueError(f"Function not allowed: {function_name}")
+            if name not in FUNCTIONS:
+                raise ValueError("Function is not allowed.")
 
-            if node.keywords:
-                raise ValueError("Keyword arguments are not supported.")
+            if node.keywords or len(node.args) > 5:
+                raise ValueError("Invalid function arguments.")
 
-            arguments = [
-                evaluate(argument, depth + 1)
-                for argument in node.args
+            args = [
+                visit(arg, depth + 1)
+                for arg in node.args
             ]
 
-            if len(arguments) > 5:
-                raise ValueError("Too many arguments.")
+            result = FUNCTIONS[name](*args)
 
-            return MATH_FUNCTIONS[function_name](*arguments)
+            if not math.isfinite(float(result)):
+                raise ValueError("Result is not finite.")
 
-        raise ValueError(
-            "Unsupported expression. Use numbers and approved math functions."
-        )
+            return result
 
-    result = evaluate(tree)
+        raise ValueError("Unsupported mathematical expression.")
 
-    if not math.isfinite(float(result)):
-        raise ValueError("Result is not finite.")
-
-    return result
+    return visit(tree)
 
 
 # =========================================================
@@ -248,23 +223,19 @@ def safe_calculate(expression):
 # =========================================================
 
 st.title("⚡ TOM LAB")
-st.subheader("Volts, Voltorbs & Variables")
+st.subheader("Mathematics • Physics • Pokémon • Scientific Discovery")
+
 st.markdown(
     """
-    **An interactive mathematics, physics and Pokémon learning lab.**
-
-    Explore mathematical expressions, investigate circuits,
-    test type interactions and solve scientific challenges.
+    An interactive environment for exploring mathematical ideas,
+    visualising scientific relationships and experimenting with models.
     """
 )
 
 st.info(
-    "Independent educational fan project. This application is not "
-    "officially affiliated with, sponsored by or endorsed by "
-    "Professor Tom Crawford, Pokémon or their publishers."
+    "Independent educational project. Not affiliated with or endorsed "
+    "by Professor Tom Crawford, Pokémon or their publishers."
 )
-
-st.divider()
 
 
 # =========================================================
@@ -273,27 +244,22 @@ st.divider()
 
 st.sidebar.title("🔬 Research Console")
 
-researcher_name = st.sidebar.text_input(
+researcher = st.sidebar.text_input(
     "Researcher name",
-    placeholder="Enter your name",
+    placeholder="Your name",
 )
 
-st.sidebar.caption(
-    "Welcome to the interactive research environment."
-)
-
-st.sidebar.divider()
-
-section = st.sidebar.radio(
+page = st.sidebar.radio(
     "Choose a laboratory",
     [
-        "🏠 Overview",
-        "🧮 Math Engine",
-        "⚡ Ohm's Law",
+        "🏠 Dashboard",
+        "🧮 Mathematics Engine",
+        "📈 Function Explorer",
+        "⚡ Physics Lab",
         "🎮 Pokémon Lab",
-        "🎯 Catch Probability",
-        "🧠 Challenges",
-        "📐 Constants",
+        "🎯 Probability Lab",
+        "🧠 Challenge Studio",
+        "📐 Constants Library",
         "📝 Research Notebook",
     ],
 )
@@ -301,90 +267,77 @@ section = st.sidebar.radio(
 st.sidebar.divider()
 
 st.sidebar.caption(
-    "Educational simulations only. Verify scientific results "
-    "before using them in formal research."
+    "Educational simulations. Check assumptions and verify results."
 )
 
 
 # =========================================================
-# OVERVIEW
+# DASHBOARD
 # =========================================================
 
-if section == "🏠 Overview":
+if page == "🏠 Dashboard":
 
-    display_name = researcher_name.strip() or "Researcher"
+    st.success(
+        f"Welcome, {researcher.strip() or 'Researcher'}! "
+        "Your laboratory is ready."
+    )
 
-    st.success(f"Welcome, {display_name}! Your laboratory is ready.")
+    st.markdown("## Explore the laboratory")
 
-    st.markdown("## 🧪 Laboratory Overview")
+    c1, c2, c3 = st.columns(3)
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("Laboratory Modules", "7")
-
-    with col2:
-        st.metric("Math Functions", len(MATH_FUNCTIONS))
-
-    with col3:
-        st.metric("Saved Notes", len(st.session_state.notes))
+    c1.metric("Scientific areas", "4")
+    c2.metric("Math functions", len(FUNCTIONS))
+    c3.metric("Saved notes", len(st.session_state.notes))
 
     st.divider()
 
-    st.markdown("### 🔭 What can you investigate?")
+    left, right = st.columns(2)
 
-    col1, col2 = st.columns(2)
-
-    with col1:
+    with left:
         st.markdown(
             """
             <div class="lab-card">
-            <h3>🧮 Mathematical Analysis</h3>
-            Calculate expressions, explore constants and investigate
-            mathematical relationships.
+            <h3>🧮 Mathematics Engine</h3>
+            Evaluate mathematical expressions using a restricted,
+            safer calculation engine.
+            </div>
+            <div class="lab-card">
+            <h3>📈 Function Explorer</h3>
+            Visualise functions and investigate the effects of parameters.
+            </div>
+            <div class="lab-card">
+            <h3>⚡ Physics Lab</h3>
+            Explore electrical circuits and Ohm's law.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
+    with right:
         st.markdown(
             """
             <div class="lab-card">
-            <h3>⚡ Electrical Physics</h3>
-            Explore the relationship between voltage, current and
-            resistance using Ohm's law.
+            <h3>🎮 Pokémon Lab</h3>
+            Investigate selected type interactions and simplified models.
+            </div>
+            <div class="lab-card">
+            <h3>🎯 Probability Lab</h3>
+            Explore probability using random experiments.
+            </div>
+            <div class="lab-card">
+            <h3>📝 Research Notebook</h3>
+            Record observations and export your notes.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-    with col2:
-        st.markdown(
-            """
-            <div class="lab-card">
-            <h3>🎮 Pokémon Mathematics</h3>
-            Investigate a simplified type-effectiveness model and
-            educational probability simulations.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown(
-            """
-            <div class="lab-card">
-            <h3>🧠 Scientific Challenges</h3>
-            Solve educational questions and reveal worked solutions.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("### 💡 Research principle")
+    st.markdown("### Research principle")
 
     st.write(
-        "A good scientific model makes its assumptions explicit, "
-        "shows how results are calculated and explains its limitations."
+        "A useful scientific model explains its assumptions, "
+        "shows its calculations and makes its limitations visible."
     )
 
 
@@ -392,142 +345,299 @@ if section == "🏠 Overview":
 # MATHEMATICS ENGINE
 # =========================================================
 
-elif section == "🧮 Math Engine":
+elif page == "🧮 Mathematics Engine":
 
-    st.header("🧮 Universal Mathematics Engine")
+    st.header("🧮 Mathematics Engine")
 
     st.write(
-        "Use arithmetic operators and approved functions. "
-        "For example: `50 * 3 + sqrt(400)`"
+        "Examples: `sqrt(144) + 2*pi`, `sin(pi/2)`, `factorial(5)`"
     )
 
-    st.markdown(
-        """
-        **Supported functions:** `sqrt`, `sin`, `cos`, `tan`,
-        `log`, `log10`, `exp`, `factorial`, `floor`, `ceil`,
-        `abs`, `round`
-
-        **Constants:** `pi`, `e`
-
-        Trigonometric functions use radians.
-        """
-    )
+    st.caption("Trigonometric functions use radians.")
 
     expression = st.text_input(
         "Mathematical expression",
         value="50 * 3 + sqrt(400)",
-        key="math_expression",
+        key="expression",
     )
 
-    if st.button("⚡ Calculate", key="math_calculate"):
+    if st.button("Calculate", key="calculate_math"):
+
         try:
-            st.session_state.math_result = (
-                expression,
-                safe_calculate(expression.strip()),
-                None,
-            )
+            result = safe_calculate(expression.strip())
+
+            st.session_state.math_result = {
+                "expression": expression,
+                "result": result,
+                "error": None,
+            }
+
         except Exception as error:
-            st.session_state.math_result = (
-                expression,
-                None,
-                str(error),
-            )
+            st.session_state.math_result = {
+                "expression": expression,
+                "result": None,
+                "error": str(error),
+            }
 
     if st.session_state.math_result is not None:
-        old_expression, result, error = st.session_state.math_result
 
-        if error:
-            st.error(f"Calculation error: {error}")
+        data = st.session_state.math_result
+
+        if data["error"]:
+            st.error(data["error"])
         else:
-            st.success(f"Result: {old_expression} = {result}")
+            st.success(
+                f'{data["expression"]} = {data["result"]}'
+            )
 
-            if isinstance(result, (int, float)):
-                st.metric("Numerical result", f"{result:.10g}")
+            st.metric(
+                "Numerical result",
+                f'{data["result"]:.10g}',
+            )
 
 
 # =========================================================
-# OHM'S LAW
+# FUNCTION EXPLORER
 # =========================================================
 
-elif section == "⚡ Ohm's Law":
+elif page == "📈 Function Explorer":
 
-    st.header("⚡ Ohm's Law Simulator")
-
-    st.latex(r"V = I \times R")
+    st.header("📈 Interactive Function Explorer")
 
     st.write(
-        "Voltage equals current multiplied by resistance."
+        "Explore how changing a function parameter affects its graph."
     )
 
-    col1, col2 = st.columns(2)
+    function_name = st.selectbox(
+        "Select a function",
+        [
+            "Linear: y = ax + b",
+            "Quadratic: y = ax² + b",
+            "Sine: y = a sin(bx)",
+            "Exponential: y = a e^(bx)",
+        ],
+    )
 
-    with col1:
-        current = st.number_input(
-            "Current (amperes)",
-            min_value=0.0,
-            max_value=1_000_000.0,
-            value=5.0,
-            step=0.5,
-        )
+    a = st.slider("Parameter a", -5.0, 5.0, 1.0, 0.5)
+    b = st.slider("Parameter b", -5.0, 5.0, 1.0, 0.5)
 
-    with col2:
-        resistance = st.number_input(
-            "Resistance (ohms)",
-            min_value=0.0,
-            max_value=1_000_000.0,
-            value=10.0,
-            step=1.0,
-        )
+    x_min, x_max = st.slider(
+        "Horizontal range",
+        -20,
+        20,
+        (-10, 10),
+    )
 
-    voltage = current * resistance
+    x = np.linspace(x_min, x_max, 400)
 
-    st.metric("Calculated voltage", f"{voltage:g} V")
+    if function_name == "Linear: y = ax + b":
+        y = a * x + b
 
-    chart_data = pd.DataFrame(
+    elif function_name == "Quadratic: y = ax² + b":
+        y = a * x**2 + b
+
+    elif function_name == "Sine: y = a sin(bx)":
+        y = a * np.sin(b * x)
+
+    else:
+        exponent = np.clip(b * x, -50, 50)
+        y = a * np.exp(exponent)
+
+    graph_data = pd.DataFrame(
         {
-            "Current (A)": [
-                current * fraction / 10
-                for fraction in range(11)
-            ]
+            "x": x,
+            "y": y,
         }
-    )
+    ).set_index("x")
 
-    chart_data["Voltage (V)"] = (
-        chart_data["Current (A)"] * resistance
-    )
+    st.line_chart(graph_data)
 
-    st.markdown("### 📊 Voltage versus current")
+    st.markdown("### What are you seeing?")
 
-    st.line_chart(
-        chart_data.set_index("Current (A)")["Voltage (V)"]
-    )
+    if function_name == "Linear: y = ax + b":
+        st.write(
+            "`a` controls the slope and `b` controls the vertical intercept."
+        )
+
+    elif function_name == "Quadratic: y = ax² + b":
+        st.write(
+            "`a` controls the opening direction and vertical stretch. "
+            "`b` shifts the graph vertically."
+        )
+
+    elif function_name == "Sine: y = a sin(bx)":
+        st.write(
+            "`a` controls amplitude. When `b` is nonzero, the period "
+            "is 2π/|b|."
+        )
+
+    else:
+        st.write(
+            "`a` controls vertical scaling. `b` controls exponential "
+            "growth or decay."
+        )
 
     st.caption(
-        "The graph assumes constant resistance and an ideal "
-        "ohmic component."
+        "The graph is sampled numerically over the selected interval."
     )
 
-    st.markdown("### 🔍 Calculation details")
 
-    st.write(f"Current: {current:g} A")
-    st.write(f"Resistance: {resistance:g} Ω")
-    st.write(f"Voltage: {current:g} × {resistance:g} = {voltage:g} V")
+# =========================================================
+# PHYSICS LAB
+# =========================================================
+
+elif page == "⚡ Physics Lab":
+
+    st.header("⚡ Electrical Physics Lab")
+
+    st.latex(r"V = I R")
+
+    st.write(
+        "Ohm's law relates voltage, current and resistance for an "
+        "ohmic component under suitable conditions."
+    )
+
+    mode = st.radio(
+        "Calculate",
+        [
+            "Voltage",
+            "Current",
+            "Resistance",
+        ],
+        horizontal=True,
+    )
+
+    if mode == "Voltage":
+
+        current = st.number_input(
+            "Current (A)",
+            min_value=0.0,
+            value=2.0,
+        )
+
+        resistance = st.number_input(
+            "Resistance (Ω)",
+            min_value=0.0,
+            value=10.0,
+        )
+
+        if st.button("Calculate voltage"):
+            voltage = current * resistance
+
+            st.metric("Voltage", f"{voltage:.4g} V")
+
+            st.write(
+                f"V = I × R = {current:g} × "
+                f"{resistance:g} = {voltage:g} V"
+            )
+
+    elif mode == "Current":
+
+        voltage = st.number_input(
+            "Voltage (V)",
+            min_value=0.0,
+            value=12.0,
+        )
+
+        resistance = st.number_input(
+            "Resistance (Ω)",
+            min_value=0.000001,
+            value=4.0,
+        )
+
+        if st.button("Calculate current"):
+            current = voltage / resistance
+
+            st.metric("Current", f"{current:.4g} A")
+
+            st.write(
+                f"I = V / R = {voltage:g} / "
+                f"{resistance:g} = {current:g} A"
+            )
+
+    else:
+
+        voltage = st.number_input(
+            "Voltage (V)",
+            min_value=0.0,
+            value=12.0,
+        )
+
+        current = st.number_input(
+            "Current (A)",
+            min_value=0.000001,
+            value=3.0,
+        )
+
+        if st.button("Calculate resistance"):
+            resistance = voltage / current
+
+            st.metric("Resistance", f"{resistance:.4g} Ω")
+
+            st.write(
+                f"R = V / I = {voltage:g} / "
+                f"{current:g} = {resistance:g} Ω"
+            )
+
+    st.divider()
+
+    st.markdown("### 📊 Voltage-current relationship")
+
+    resistance_graph = st.slider(
+        "Fixed resistance (Ω)",
+        1,
+        100,
+        10,
+    )
+
+    currents = np.linspace(0, 10, 101)
+
+    graph = pd.DataFrame(
+        {
+            "Current (A)": currents,
+            "Voltage (V)": currents * resistance_graph,
+        }
+    ).set_index("Current (A)")
+
+    st.line_chart(graph)
 
 
 # =========================================================
 # POKÉMON LAB
 # =========================================================
 
-elif section == "🎮 Pokémon Lab":
+elif page == "🎮 Pokémon Lab":
 
-    st.header("🎮 Pokémon Type-Effectiveness Lab")
+    st.header("🎮 Pokémon Mathematics Lab")
 
     st.write(
-        "This demonstration covers only four types and selected "
-        "interactions. It is not a complete Pokémon type chart."
+        "Use familiar fictional examples to explore mathematical models."
     )
 
-    types = ["Electric", "Water", "Fire", "Grass"]
+    st.warning(
+        "The matchup table below is intentionally limited to four types. "
+        "Unlisted interactions default to neutral and may not reflect "
+        "the full rules of any Pokémon game."
+    )
+
+    types = [
+        "Electric",
+        "Water",
+        "Fire",
+        "Grass",
+    ]
+
+    chart = {
+        ("Electric", "Water"): 2.0,
+        ("Electric", "Grass"): 0.5,
+        ("Electric", "Electric"): 0.5,
+        ("Water", "Fire"): 2.0,
+        ("Water", "Grass"): 0.5,
+        ("Fire", "Grass"): 2.0,
+        ("Fire", "Water"): 0.5,
+        ("Grass", "Water"): 2.0,
+        ("Grass", "Fire"): 0.5,
+    }
 
     col1, col2 = st.columns(2)
 
@@ -535,266 +645,277 @@ elif section == "🎮 Pokémon Lab":
         attacker = st.selectbox(
             "Attacking type",
             types,
-            key="attacker_type",
         )
 
     with col2:
         defender = st.selectbox(
             "Defending type",
             types,
-            key="defender_type",
         )
 
-    # Selected interactions from the standard type chart.
-    # All other interactions in this limited model are neutral.
-    effectiveness = {
-        ("Electric", "Water"): 2.0,
-        ("Electric", "Grass"): 0.5,
-        ("Water", "Fire"): 2.0,
-        ("Water", "Grass"): 0.5,
-        ("Fire", "Grass"): 2.0,
-        ("Fire", "Water"): 0.5,
-        ("Grass", "Water"): 2.0,
-        ("Grass", "Fire"): 0.5,
-        ("Electric", "Electric"): 0.5,
-        ("Water", "Electric"): 1.0,
-        ("Fire", "Electric"): 1.0,
-        ("Grass", "Electric"): 1.0,
-    }
+    multiplier = chart.get(
+        (attacker, defender),
+        1.0,
+    )
 
-    multiplier = effectiveness.get((attacker, defender), 1.0)
-
-    st.markdown("### 🔬 Analysis")
-
-    st.metric("Effectiveness multiplier", f"{multiplier:g}×")
+    st.metric(
+        "Modelled effectiveness",
+        f"{multiplier:g}×",
+    )
 
     if multiplier > 1:
-        st.success("Super effective in this simplified model!")
-    elif multiplier < 1:
-        st.warning("Not very effective in this simplified model.")
-    else:
-        st.info("Neutral damage in this simplified model.")
+        st.success("Super effective in this limited model!")
 
-    st.caption(
-        "The full game includes additional types, immunities, "
-        "dual-type interactions and other battle mechanics."
-    )
+    elif multiplier < 1:
+        st.warning("Not very effective in this limited model.")
+
+    else:
+        st.info("Neutral in this limited model.")
 
     st.divider()
 
-    st.markdown("### 📋 Selected matchup table")
+    st.markdown("### 🧪 Illustrative CP model")
 
-    table = pd.DataFrame(
-        [
-            {
-                "Attacking type": a,
-                "Defending type": d,
-                "Multiplier": effectiveness.get((a, d), 1.0),
-            }
-            for a in types
-            for d in types
-        ]
+    st.caption(
+        "This is an invented educational model, not an official game formula."
     )
 
-    st.dataframe(table, use_container_width=True, hide_index=True)
+    initial_cp = st.number_input(
+        "Initial CP (arbitrary units)",
+        min_value=0.0,
+        value=1200.0,
+    )
+
+    growth_factor = st.slider(
+        "Illustrative growth factor",
+        1.0,
+        3.0,
+        1.8,
+        0.1,
+    )
+
+    bonus = st.number_input(
+        "Additional bonus (arbitrary units)",
+        min_value=0.0,
+        value=25.0,
+    )
+
+    estimated_cp = initial_cp * growth_factor + bonus
+
+    st.metric(
+        "Model output",
+        f"{estimated_cp:.2f}",
+    )
 
 
 # =========================================================
-# CATCH PROBABILITY
+# PROBABILITY LAB
 # =========================================================
 
-elif section == "🎯 Catch Probability":
+elif page == "🎯 Probability Lab":
 
-    st.header("🎯 Educational Catch-Probability Simulator")
+    st.header("🎯 Probability & Monte Carlo Lab")
 
-    st.warning(
-        "This is a hypothetical classroom model, not the official "
-        "Pokémon GO or main-series catch-rate formula."
+    st.write(
+        "Monte Carlo simulation estimates mathematical quantities "
+        "using repeated random experiments."
     )
 
-    level = st.slider(
-        "Illustrative difficulty level",
-        min_value=1,
-        max_value=100,
-        value=40,
+    st.markdown("### 🟣 Estimate π")
+
+    st.write(
+        "Random points are sampled in a square surrounding a quarter "
+        "circle. The proportion inside the circle estimates π/4."
     )
 
-    ball = st.selectbox(
-        "Hypothetical ball multiplier",
-        [
-            "Standard Ball",
-            "Great Ball",
-            "Ultra Ball",
-            "Master Ball",
+    trials = st.select_slider(
+        "Number of random points",
+        options=[
+            100,
+            500,
+            1000,
+            5000,
+            10000,
+            50000,
         ],
+        value=5000,
     )
 
-    multipliers = {
-        "Standard Ball": 1.0,
-        "Great Ball": 1.5,
-        "Ultra Ball": 2.0,
-        "Master Ball": 100.0,
-    }
+    if st.button("Run Monte Carlo experiment"):
 
-    if st.button("🎲 Run simulation"):
+        rng = np.random.default_rng()
 
-        if ball == "Master Ball":
-            probability = 100.0
-        else:
-            probability = min(
-                100.0,
-                max(
-                    1.0,
-                    (100.0 / (level * 0.4)) * multipliers[ball] * 10,
-                ),
-            )
+        x = rng.random(trials)
+        y = rng.random(trials)
 
-        st.session_state.catch_result = probability
+        inside = (x**2 + y**2) <= 1
 
-    if st.session_state.catch_result is not None:
+        estimate = 4 * np.mean(inside)
+
+        st.session_state.monte_carlo_result = {
+            "trials": trials,
+            "estimate": float(estimate),
+            "inside": int(np.sum(inside)),
+        }
+
+    if st.session_state.monte_carlo_result:
+
+        result = st.session_state.monte_carlo_result
+
         st.metric(
-            "Model output",
-            f"{st.session_state.catch_result:.2f}%",
+            "Estimated π",
+            f'{result["estimate"]:.6f}',
         )
 
-        st.progress(
-            int(round(st.session_state.catch_result))
+        st.metric(
+            "Actual π",
+            f"{math.pi:.6f}",
+        )
+
+        st.metric(
+            "Absolute error",
+            f"{abs(result['estimate'] - math.pi):.6f}",
+        )
+
+        st.write(
+            f'Points inside quarter circle: {result["inside"]} '
+            f'of {result["trials"]}.'
         )
 
         st.caption(
-            "This percentage is generated by the illustrative formula "
-            "in this application and is not a prediction of actual "
-            "in-game outcomes."
+            "The estimate varies between runs. More samples often "
+            "improve accuracy, but do not guarantee a closer estimate "
+            "in every individual run."
         )
 
 
 # =========================================================
-# CHALLENGES
+# CHALLENGE STUDIO
 # =========================================================
 
-elif section == "🧠 Challenges":
+elif page == "🧠 Challenge Studio":
 
-    st.header("🧠 Scientific Challenge Generator")
+    st.header("🧠 Scientific Challenge Studio")
 
-    challenges = [
+    questions = [
         {
             "question": (
-                "A circuit has a voltage of 100 V and a resistance "
-                "of 20 Ω. What is the current?"
+                "A circuit has a voltage of 100 V and resistance of "
+                "20 Ω. What is its current?"
             ),
-            "hint": "Use Ohm's law: I = V / R.",
-            "solution": "I = 100 / 20 = 5 A.",
+            "hint": "Use I = V/R.",
             "answer": 5.0,
+            "solution": "I = 100/20 = 5 A.",
         },
         {
             "question": (
-                "What is the volume of a sphere with radius 5 units?"
+                "What is the volume of a sphere with radius 3 units?"
             ),
             "hint": "Use V = (4/3)πr³.",
+            "answer": (4 / 3) * math.pi * 27,
             "solution": (
-                "V = (4/3) × π × 5³ = (500/3)π ≈ 523.60 cubic units."
+                "V = (4/3) × π × 3³ = 36π ≈ 113.097 cubic units."
             ),
-            "answer": (4 / 3) * math.pi * 125,
         },
         {
-            "question": (
-                "Evaluate sin(π/2) + sqrt(81). "
-                "Remember that trigonometric functions use radians."
-            ),
+            "question": "Evaluate sin(π/2) + sqrt(81).",
             "hint": "sin(π/2) = 1 and sqrt(81) = 9.",
-            "solution": "1 + 9 = 10.",
             "answer": 10.0,
+            "solution": "1 + 9 = 10.",
         },
     ]
 
-    if st.button("🎲 Generate a challenge") or (
-        st.session_state.challenge is None
-    ):
-        st.session_state.challenge = random.choice(challenges)
-        st.session_state.challenge_answer = None
+    if st.button("🎲 Generate new challenge"):
+        st.session_state.challenge_index = random.randrange(
+            len(questions)
+        )
 
-    challenge = st.session_state.challenge
+    if st.session_state.challenge_index is None:
+        st.session_state.challenge_index = 0
 
-    st.markdown("### 🧪 Your question")
+    question = questions[st.session_state.challenge_index]
 
-    st.write(challenge["question"])
+    st.markdown("### Problem")
 
-    if st.button("💡 Show hint"):
-        st.info(challenge["hint"])
+    st.write(question["question"])
 
-    user_answer = st.text_input(
-        "Your numerical answer",
-        key="challenge_user_answer",
+    if st.button("💡 Reveal hint"):
+        st.info(question["hint"])
+
+    answer_text = st.text_input(
+        "Your answer",
+        key="answer_text",
     )
 
-    if st.button("✅ Check answer"):
+    if st.button("Check answer"):
+
         try:
-            submitted = safe_calculate(user_answer.strip())
+            submitted = safe_calculate(answer_text.strip())
 
             if math.isclose(
                 float(submitted),
-                float(challenge["answer"]),
+                question["answer"],
                 rel_tol=1e-3,
                 abs_tol=1e-3,
             ):
-                st.success("Correct! Excellent scientific reasoning.")
+                st.success("Correct! Great work.")
             else:
                 st.warning(
-                    "Not quite. Try again or reveal the worked solution."
+                    "Not quite. Try again or inspect the solution."
                 )
+
         except Exception:
             st.error(
-                "Enter a valid numerical expression, such as 5 or 2*pi."
+                "Please enter a valid numerical expression."
             )
 
-    if st.button("📖 Reveal worked solution"):
-        st.info(challenge["solution"])
+    if st.button("📖 Show worked solution"):
+        st.info(question["solution"])
 
 
 # =========================================================
-# MATHEMATICAL CONSTANTS
+# CONSTANTS LIBRARY
 # =========================================================
 
-elif section == "📐 Constants":
+elif page == "📐 Constants Library":
 
-    st.header("📐 Mathematical Constants Dictionary")
+    st.header("📐 Mathematical Constants Library")
 
     constants = {
         "Pi (π)": (
             math.pi,
-            "The ratio of a circle's circumference to its diameter.",
+            "Circumference divided by diameter for a circle.",
         ),
         "Euler's number (e)": (
             math.e,
-            "A fundamental constant in exponential growth and calculus.",
+            "A central constant in exponential growth and calculus.",
         ),
         "Golden ratio (φ)": (
             (1 + math.sqrt(5)) / 2,
-            "A mathematical ratio found in several geometric contexts.",
+            "A ratio appearing in several geometric constructions.",
         ),
         "Square root of 2": (
             math.sqrt(2),
-            "The diagonal of a unit square.",
-        ),
-        "Square root of 3": (
-            math.sqrt(3),
-            "Appears in equilateral-triangle geometry.",
+            "The diagonal length of a unit square.",
         ),
     }
 
-    selected_constant = st.selectbox(
-        "Select a constant",
+    selected = st.selectbox(
+        "Choose a constant",
         list(constants.keys()),
     )
 
-    value, description = constants[selected_constant]
+    value, description = constants[selected]
 
-    st.metric("Numerical value", f"{value:.12f}")
+    st.metric(
+        "Approximate value",
+        f"{value:.12f}",
+    )
+
     st.write(description)
 
     st.caption(
-        "Mathematical constants have precise definitions; the displayed "
-        "decimal values are rounded approximations."
+        "Displayed decimal values are approximations."
     )
 
 
@@ -802,34 +923,39 @@ elif section == "📐 Constants":
 # RESEARCH NOTEBOOK
 # =========================================================
 
-elif section == "📝 Research Notebook":
+elif page == "📝 Research Notebook":
 
-    st.header("📝 Researcher's Notebook")
+    st.header("📝 Research Notebook")
 
     st.write(
-        "Write observations, ideas, calculations or future experiments."
+        "Record observations, hypotheses, calculations and ideas."
     )
 
-    note_title = st.text_input(
+    title = st.text_input(
         "Note title",
-        placeholder="e.g. Ideas for the next experiment",
+        placeholder="Experiment 01",
     )
 
-    note_text = st.text_area(
-        "Research notes",
+    content = st.text_area(
+        "Your notes",
         height=180,
-        placeholder="Record your observations here...",
+        placeholder="Write your observations...",
     )
 
     if st.button("💾 Save note"):
 
-        if not note_title.strip() or not note_text.strip():
-            st.warning("Please provide both a title and note content.")
+        if not title.strip() or not content.strip():
+
+            st.warning(
+                "Enter both a title and note content."
+            )
+
         else:
+
             st.session_state.notes.append(
                 {
-                    "title": note_title.strip(),
-                    "content": note_text.strip(),
+                    "title": title.strip(),
+                    "content": content.strip(),
                 }
             )
 
@@ -837,44 +963,50 @@ elif section == "📝 Research Notebook":
 
     st.divider()
 
-    st.markdown("### 📚 Saved notes")
-
     if st.session_state.notes:
 
         for index, note in enumerate(
             st.session_state.notes,
             start=1,
         ):
-            with st.expander(f"{index}. {note['title']}"):
+
+            with st.expander(
+                f'{index}. {note["title"]}'
+            ):
+
                 st.write(note["content"])
 
-        export_text = "\n\n".join(
+        export_content = "\n\n".join(
             [
-                f"TITLE: {note['title']}\n{note['content']}"
+                f'TITLE: {note["title"]}\n{note["content"]}'
                 for note in st.session_state.notes
             ]
         )
 
         st.download_button(
-            label="⬇️ Download notes as TXT",
-            data=export_text,
-            file_name="tom_lab_research_notes.txt",
+            "⬇️ Download notebook (.txt)",
+            data=export_content,
+            file_name="tom_lab_notebook.txt",
             mime="text/plain",
         )
 
-        if st.button("🗑️ Clear all notes"):
+        if st.button("🗑️ Clear notebook"):
+
             st.session_state.notes = []
-            st.success("Session notes cleared.")
+
+            st.success("Notebook cleared.")
+
             st.rerun()
 
     else:
+
         st.info(
-            "No notes saved yet. Add your first research observation above."
+            "Your notebook is empty. Save your first observation above."
         )
 
     st.caption(
-        "Notes are stored in the current Streamlit session, not in a "
-        "permanent database. Download them before ending the session."
+        "Notes remain in the current session. Download them to keep "
+        "a permanent copy."
     )
 
 
@@ -886,9 +1018,10 @@ st.divider()
 
 st.markdown(
     """
-    <div style="text-align:center; color:#94a3b8;">
-        <p>⚡ TOM LAB | Mathematics • Physics • Pokémon</p>
-        <p>Independent educational project • Built with Python and Streamlit</p>
+    <div style="text-align:center;color:#94a3b8;">
+        <p>⚡ TOM LAB</p>
+        <p>Independent educational project built with Python and Streamlit</p>
+        <p>Mathematics • Physics • Probability • Scientific Exploration</p>
     </div>
     """,
     unsafe_allow_html=True,
