@@ -1,23 +1,123 @@
 import ast
 import math
 import operator
+import random
 
 import numpy as np
-import streamlit as st
 import matplotlib.pyplot as plt
+import streamlit as st
 
-# =====================================================
-# TOM LAB 6.0
-# Interactive Mathematics & Science Learning Universe
-# =====================================================
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
-    page_title="Tom Lab | Learn by Experimenting",
+    page_title="Tom Lab | Interactive Maths & Science",
     page_icon="⚡",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# ---------------- SESSION STATE ----------------
+
+# ============================================================
+# LANGUAGE
+# ============================================================
+
+LANGUAGES = {
+    "English": {
+        "home": "Command Centre",
+        "math": "Math Arcade",
+        "power": "Pokémon Power Lab",
+        "pi": "Monte Carlo π Lab",
+        "sphere": "4D Sphere Lab",
+        "functions": "Function Lab",
+        "physics": "Physics Lab",
+        "calculator": "Calculator",
+        "about": "About the Project",
+        "welcome": "WELCOME TO TOM LAB",
+        "subtitle": "Where mathematical ideas become interactive experiments.",
+        "mission": "YOUR MISSION",
+        "mission_text": (
+            "Explore mathematics and physics through simulations, "
+            "experiments and step-by-step explanations."
+        ),
+        "choose": "Choose a laboratory",
+        "trials": "Number of random points",
+        "run": "Run experiment",
+        "result": "Your result",
+        "steps": "How does it work?",
+        "formula": "Mathematical formula",
+        "learn": "What does this mean?",
+        "voltage": "Voltage (V)",
+        "resistance": "Resistance (Ω)",
+        "power_w": "Bulb power (watts)",
+        "pokemon_power": "Energy per Pokémon (watts)",
+        "calculate": "Calculate",
+        "expression": "Enter a mathematical expression",
+        "solve": "Calculate expression",
+        "question": "Practice question",
+        "check": "Check answer",
+        "your_answer": "Your answer",
+        "correct": "Correct! Well done!",
+        "incorrect": "Not quite. Read the explanation and try again.",
+        "level": "Researcher level",
+        "xp": "Research XP",
+        "language": "Language",
+        "independent": "Independent educational project",
+    },
+    "Türkçe": {
+        "home": "Kontrol Merkezi",
+        "math": "Matematik Arenası",
+        "power": "Pokémon Enerji Laboratuvarı",
+        "pi": "Monte Carlo π Laboratuvarı",
+        "sphere": "4B Küre Laboratuvarı",
+        "functions": "Fonksiyon Laboratuvarı",
+        "physics": "Fizik Laboratuvarı",
+        "calculator": "Hesap Makinesi",
+        "about": "Proje Hakkında",
+        "welcome": "TOM LAB'E HOŞ GELDİN",
+        "subtitle": "Matematiksel fikirlerin etkileşimli deneylere dönüştüğü yer.",
+        "mission": "GÖREVİN",
+        "mission_text": (
+            "Simülasyonlar, deneyler ve adım adım açıklamalarla "
+            "matematiği ve fiziği keşfet."
+        ),
+        "choose": "Bir laboratuvar seç",
+        "trials": "Rastgele nokta sayısı",
+        "run": "Deneyi başlat",
+        "result": "Sonucun",
+        "steps": "Bu nasıl çalışıyor?",
+        "formula": "Matematiksel formül",
+        "learn": "Bu ne anlama geliyor?",
+        "voltage": "Gerilim (V)",
+        "resistance": "Direnç (Ω)",
+        "power_w": "Ampul gücü (watt)",
+        "pokemon_power": "Pokémon başına enerji (watt)",
+        "calculate": "Hesapla",
+        "expression": "Matematiksel bir ifade gir",
+        "solve": "İfadeyi hesapla",
+        "question": "Alıştırma sorusu",
+        "check": "Cevabı kontrol et",
+        "your_answer": "Cevabın",
+        "correct": "Doğru! Harika iş!",
+        "incorrect": "Tam değil. Açıklamayı oku ve tekrar dene.",
+        "level": "Araştırmacı seviyesi",
+        "xp": "Araştırma puanı",
+        "language": "Dil",
+        "independent": "Bağımsız eğitim projesi",
+    },
+}
+
+
+def t(key):
+    language = st.session_state.get("language", "English")
+    return LANGUAGES[language].get(key, LANGUAGES["English"].get(key, key))
+
+
+# ============================================================
+# SESSION STATE
+# ============================================================
 
 if "language" not in st.session_state:
     st.session_state.language = "English"
@@ -28,1098 +128,1073 @@ if "xp" not in st.session_state:
 if "completed" not in st.session_state:
     st.session_state.completed = []
 
-if "history" not in st.session_state:
-    st.session_state.history = []
-
-
-# ---------------- TRANSLATIONS ----------------
-
-TEXT = {
-    "English": {
-        "home": "🌌 Command Center",
-        "math": "🧮 Math Arcade",
-        "functions": "📈 Function Lab",
-        "physics": "⚡ Physics Lab",
-        "pokemon": "🐉 Pokémon Energy",
-        "probability": "🎲 Probability Arena",
-        "pi": "🎯 Monte Carlo π",
-        "sphere": "🌐 4D Universe",
-        "about": "🔬 About",
-        "language": "Language",
-        "welcome": "WELCOME TO TOM LAB",
-        "subtitle": "See mathematics. Understand it. Experiment with it.",
-        "xp": "Experience points",
-        "level": "Explorer level",
-        "missions": "Completed missions",
-        "expression": "Mathematical expression",
-        "calculate": "Calculate and explain",
-        "result": "Result",
-        "run": "RUN EXPERIMENT",
-        "points": "Number of random points",
-        "voltage": "Voltage (V)",
-        "resistance": "Resistance (Ω)",
-        "bulb": "Bulb power (W)",
-        "pikachu": "Hypothetical Pokémon power (W)",
-        "function": "Choose a function",
-        "steps": "🧠 How is the result calculated?",
-        "try": "🎯 Your turn",
-        "correct": "Correct! You have understood the idea.",
-        "error": "Please enter a valid mathematical expression.",
-    },
-    "Türkçe": {
-        "home": "🌌 Komuta Merkezi",
-        "math": "🧮 Matematik Arenası",
-        "functions": "📈 Fonksiyon Laboratuvarı",
-        "physics": "⚡ Fizik Laboratuvarı",
-        "pokemon": "🐉 Pokémon Enerjisi",
-        "probability": "🎲 Olasılık Arenası",
-        "pi": "🎯 Monte Carlo π",
-        "sphere": "🌐 4B Evren",
-        "about": "🔬 Hakkında",
-        "language": "Dil",
-        "welcome": "TOM LAB'A HOŞ GELDİN",
-        "subtitle": "Matematiği gör. Anla. Deneyerek keşfet.",
-        "xp": "Deneyim puanı",
-        "level": "Kaşif seviyesi",
-        "missions": "Tamamlanan görevler",
-        "expression": "Matematiksel ifade",
-        "calculate": "Hesapla ve açıkla",
-        "result": "Sonuç",
-        "run": "DENEYİ BAŞLAT",
-        "points": "Rastgele nokta sayısı",
-        "voltage": "Gerilim (V)",
-        "resistance": "Direnç (Ω)",
-        "bulb": "Ampul gücü (W)",
-        "pikachu": "Varsayımsal Pokémon gücü (W)",
-        "function": "Fonksiyon seç",
-        "steps": "🧠 Sonuç nasıl hesaplanıyor?",
-        "try": "🎯 Şimdi sıra sende",
-        "correct": "Doğru! Mantığı anlamışsın.",
-        "error": "Lütfen geçerli bir matematiksel ifade gir.",
-    },
-}
-
-
-def t(key):
-    lang = st.session_state.get("language", "English")
-    return TEXT.get(lang, TEXT["English"]).get(
-        key, TEXT["English"].get(key, key)
-    )
+if "last_pi" not in st.session_state:
+    st.session_state.last_pi = None
 
 
 def award_xp(mission, points=10):
     if mission not in st.session_state.completed:
         st.session_state.completed.append(mission)
         st.session_state.xp += points
-        st.toast(f"⭐ +{points} XP!")
+        st.toast(f"+{points} XP ⚡")
 
 
-# ---------------- DESIGN ----------------
+# ============================================================
+# DESIGN
+# ============================================================
 
-st.markdown("""
-<style>
-@import url(
-'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&display=swap'
-);
-
-.stApp {
-    background:
-      radial-gradient(ellipse at 10% 10%,
-      rgba(0,220,255,.15), transparent 38%),
-      radial-gradient(ellipse at 90% 20%,
-      rgba(145,65,255,.17), transparent 40%),
-      #080b18;
-    color: #f5f7ff;
-}
-
-h1, h2, h3 {
-    font-family: Orbitron, sans-serif !important;
-}
-
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg,#111a32,#080b18);
-    border-right: 1px solid #164d72;
-}
-
-[data-testid="stMetric"] {
-    background: rgba(20,32,58,.8);
-    border: 1px solid rgba(0,220,255,.35);
-    border-radius: 15px;
-    padding: 12px;
-}
-
-.hero {
-    text-align: center;
-    padding: 30px 16px;
-    margin-bottom: 20px;
-    border-radius: 24px;
-    border: 1px solid #247caa;
-    background: linear-gradient(
-      130deg,
-      rgba(0,220,255,.12),
-      rgba(120,65,255,.18),
-      rgba(255,205,50,.08)
+st.markdown(
+    """
+    <style>
+    @import url(
+      'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800'
+      '&family=Inter:wght@400;500;600;700&display=swap'
     );
-}
 
-.hero h1 {
-    text-shadow: 0 0 20px rgba(0,220,255,.5);
-}
+    .stApp {
+        background:
+            radial-gradient(
+                ellipse at top left,
+                rgba(0, 190, 255, 0.13),
+                transparent 38%
+            ),
+            radial-gradient(
+                ellipse at bottom right,
+                rgba(150, 65, 255, 0.12),
+                transparent 35%
+            ),
+            #07111f;
+        color: #edf5ff;
+    }
 
-.lesson {
-    padding: 16px;
-    margin: 12px 0;
-    border-radius: 14px;
-    background: rgba(20,32,58,.7);
-    border-left: 4px solid #00d9ff;
-}
+    h1, h2, h3 {
+        color: #e9f5ff !important;
+    }
 
-div.stButton > button {
-    border-radius: 12px;
-    border: 1px solid #00d9ff;
-    background: linear-gradient(110deg,#123b65,#452276);
-    color: white;
-    font-weight: 700;
-    min-height: 42px;
-}
+    .hero {
+        padding: 32px 28px;
+        border: 1px solid rgba(91, 203, 255, .4);
+        border-radius: 22px;
+        background: linear-gradient(
+            120deg,
+            rgba(9, 45, 77, .95),
+            rgba(31, 22, 70, .95)
+        );
+        box-shadow: 0 0 30px rgba(0, 174, 255, .08);
+        margin-bottom: 22px;
+    }
 
-.footer {
-    text-align: center;
-    padding: 24px;
-    color: #9baaca;
-}
-</style>
-""", unsafe_allow_html=True)
+    .hero-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: clamp(26px, 4vw, 42px);
+        font-weight: 800;
+        letter-spacing: 1px;
+        color: #74e4ff;
+        margin-bottom: 12px;
+    }
 
+    .hero-subtitle {
+        font-size: 17px;
+        line-height: 1.7;
+        color: #d1e6ff;
+    }
 
-# ---------------- SAFE CALCULATOR ----------------
+    .lab-card {
+        background: rgba(15, 34, 55, .85);
+        border: 1px solid rgba(103, 184, 255, .25);
+        border-radius: 17px;
+        padding: 19px;
+        min-height: 150px;
+        margin-bottom: 14px;
+    }
 
-OPS = {
-    ast.Add: operator.add,
-    ast.Sub: operator.sub,
-    ast.Mult: operator.mul,
-    ast.Div: operator.truediv,
-    ast.Pow: operator.pow,
-    ast.Mod: operator.mod,
-    ast.UAdd: operator.pos,
-    ast.USub: operator.neg,
-}
+    .lab-card h3 {
+        margin-top: 0;
+        color: #75e6ff !important;
+    }
 
-FUNCS = {
-    "sqrt": math.sqrt,
-    "sin": math.sin,
-    "cos": math.cos,
-    "tan": math.tan,
-    "log": math.log,
-    "abs": abs,
-}
+    .lab-card p {
+        color: #cbd9ed;
+        line-height: 1.6;
+    }
 
+    .formula-box {
+        background: rgba(0, 183, 255, .08);
+        border-left: 4px solid #4dd8ff;
+        padding: 15px;
+        border-radius: 9px;
+        margin: 12px 0;
+    }
 
-def safe_eval(expression):
-    tree = ast.parse(expression, mode="eval")
+    .small-note {
+        color: #a9c1df;
+        font-size: 13px;
+    }
 
-    def visit(node):
-        if isinstance(node, ast.Expression):
-            return visit(node.body)
+    div.stButton > button {
+        border-radius: 10px;
+        border: 1px solid #42d8ff;
+        background: linear-gradient(90deg, #087ca5, #5343a8);
+        color: white;
+        font-weight: 700;
+        min-height: 42px;
+    }
 
-        if isinstance(node, ast.Constant):
-            if isinstance(node.value, (int, float)):
-                return node.value
+    div.stButton > button:hover {
+        border-color: #ffffff;
+        color: white;
+        box-shadow: 0 0 14px rgba(66, 216, 255, .3);
+    }
 
-        if isinstance(node, ast.Name):
-            if node.id == "pi":
-                return math.pi
-            if node.id == "e":
-                return math.e
+    [data-testid="stMetric"] {
+        background: rgba(16, 39, 64, .8);
+        border: 1px solid rgba(103, 184, 255, .2);
+        border-radius: 13px;
+        padding: 12px;
+    }
 
-        if isinstance(node, ast.BinOp):
-            if type(node.op) not in OPS:
-                raise ValueError("Unsupported operation")
+    section[data-testid="stSidebar"] {
+        background: #091827;
+    }
 
-            left = visit(node.left)
-            right = visit(node.right)
-
-            if isinstance(node.op, ast.Pow) and abs(right) > 10:
-                raise ValueError("Exponent too large")
-
-            return OPS[type(node.op)](left, right)
-
-        if isinstance(node, ast.UnaryOp):
-            if type(node.op) not in OPS:
-                raise ValueError("Unsupported unary operation")
-            return OPS[type(node.op)](visit(node.operand))
-
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            name = node.func.id
-            if name in FUNCS and len(node.args) == 1:
-                return FUNCS[name](visit(node.args[0]))
-
-        raise ValueError("Unsupported expression")
-
-    result = visit(tree)
-
-    if not math.isfinite(float(result)):
-        raise ValueError("Non-finite result")
-
-    return result
-
-
-# ---------------- SIDEBAR ----------------
-
-st.sidebar.markdown("## ⚡ TOM LAB")
-
-st.sidebar.selectbox(
-    t("language"),
-    ["English", "Türkçe"],
-    key="language",
-)
-
-pages = [
-    t("home"),
-    t("math"),
-    t("functions"),
-    t("physics"),
-    t("pokemon"),
-    t("probability"),
-    t("pi"),
-    t("sphere"),
-    t("about"),
-]
-
-page = st.sidebar.radio("🚀 Navigation", pages)
-
-xp = st.session_state.xp
-level = xp // 100 + 1
-
-st.sidebar.markdown("---")
-st.sidebar.metric("⭐ " + t("xp"), xp)
-st.sidebar.metric("🏆 " + t("level"), level)
-st.sidebar.progress((xp % 100) / 100)
-st.sidebar.caption(
-    f"{100 - (xp % 100)} XP to the next level"
-)
-st.sidebar.caption(
-    f"{t('missions')}: {len(st.session_state.completed)}"
+    hr {
+        border-color: rgba(116, 228, 255, .2);
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 
-# =====================================================
+# ============================================================
+# HEADER AND NAVIGATION
+# ============================================================
+
+with st.sidebar:
+    st.markdown("## ⚡ TOM LAB")
+
+    st.selectbox(
+        t("language"),
+        ["English", "Türkçe"],
+        key="language",
+    )
+
+    pages = [
+        "home",
+        "math",
+        "power",
+        "pi",
+        "sphere",
+        "functions",
+        "physics",
+        "calculator",
+        "about",
+    ]
+
+    page_labels = [t(p) for p in pages]
+
+    selected_label = st.radio(
+        "Navigation",
+        page_labels,
+        label_visibility="collapsed",
+    )
+
+    page = pages[page_labels.index(selected_label)]
+
+    st.divider()
+
+    st.metric(t("xp"), st.session_state.xp)
+
+    level = 1 + st.session_state.xp // 50
+    st.markdown(f"**{t('level')}: {level}**")
+
+    st.progress(min((st.session_state.xp % 50) / 50, 1.0))
+
+    st.caption(
+        f"{len(st.session_state.completed)} experiments completed"
+    )
+
+
+# ============================================================
+# POKÉMON IMAGE HELPER
+# ============================================================
+
+def pokemon_image(number, caption, width=130):
+    url = (
+        "https://raw.githubusercontent.com/"
+        f"PokeAPI/sprites/master/sprites/pokemon/{number}.png"
+    )
+    try:
+        st.image(url, width=width, caption=caption)
+    except Exception:
+        st.markdown(f"### ⚡ {caption}")
+
+
+# ============================================================
 # HOME
-# =====================================================
+# ============================================================
 
-if page == t("home"):
-
+if page == "home":
     st.markdown(
         f"""
         <div class="hero">
-          <div style="font-size:60px">⚡ 🐉 🔥 🌌</div>
-          <h1>{t('welcome')}</h1>
-          <p>{t('subtitle')}</p>
+            <div class="hero-title">⚡ {t("welcome")}</div>
+            <div class="hero-subtitle">{t("subtitle")}</div>
+            <hr>
+            <h3>{t("mission")}</h3>
+            <div class="hero-subtitle">{t("mission_text")}</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    a, b, c = st.columns(3)
-    a.metric("⭐ XP", xp)
-    b.metric("🏆 Level", level)
-    c.metric("✅ Missions", len(st.session_state.completed))
+    col1, col2, col3 = st.columns(3)
 
-    st.markdown("## 🚀 Choose your adventure")
+    with col1:
+        pokemon_image(25, "Pikachu • Energy", 115)
+
+    with col2:
+        pokemon_image(6, "Charizard • Power", 115)
+
+    with col3:
+        pokemon_image(150, "Mewtwo • Probability", 115)
+
+    st.subheader(t("choose"))
 
     cards = [
-        ("🧮", t("math"), "Calculate and understand."),
-        ("📈", t("functions"), "Discover mathematical patterns."),
-        ("⚡", t("physics"), "Experiment with electricity."),
-        ("🐉", t("pokemon"), "Build a fictional energy model."),
-        ("🎲", t("probability"), "Explore chance and randomness."),
-        ("🎯", t("pi"), "Estimate π visually."),
-        ("🌐", t("sphere"), "Explore a 4D sphere."),
+        (
+            "⚡ Pokémon Power",
+            "Explore energy, electrical power and estimation.",
+        ),
+        (
+            "🎯 Monte Carlo π",
+            "Use random points to estimate a famous constant.",
+        ),
+        (
+            "🌌 4D Sphere",
+            "Explore probability and higher-dimensional geometry.",
+        ),
+        (
+            "📈 Function Lab",
+            "See how equations become curves.",
+        ),
+        (
+            "🔌 Physics Lab",
+            "Experiment with voltage, current and resistance.",
+        ),
+        (
+            "🧠 Math Arcade",
+            "Solve problems and earn research XP.",
+        ),
     ]
 
-    for start in range(0, len(cards), 3):
-        cols = st.columns(3)
-        for col, card in zip(cols, cards[start:start + 3]):
-            with col:
-                st.markdown(
-                    f"""
-                    <div class="lesson">
-                    <h3>{card[0]} {card[1]}</h3>
-                    <p>{card[2]}</p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+    columns = st.columns(3)
+
+    for i, (title, description) in enumerate(cards):
+        with columns[i % 3]:
+            st.markdown(
+                f"""
+                <div class="lab-card">
+                    <h3>{title}</h3>
+                    <p>{description}</p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
     st.info(
-        "Learn by experimenting: change values, observe results, "
-        "and read the explanation."
+        "Research principle: every simulation is a mathematical model. "
+        "Check its assumptions before interpreting the result."
     )
 
 
-# =====================================================
+# ============================================================
+# POKÉMON POWER LAB
+# ============================================================
+
+elif page == "power":
+    st.title("⚡ Pokémon Power Laboratory")
+
+    st.write(
+        "Can a team of Pokémon provide enough energy to power a lightbulb?"
+    )
+
+    left, right = st.columns([1, 2])
+
+    with left:
+        pokemon_image(25, "Pikachu", 150)
+
+        bulb_watts = st.slider(
+            t("power_w"),
+            min_value=1,
+            max_value=200,
+            value=60,
+        )
+
+        pokemon_watts = st.slider(
+            t("pokemon_power"),
+            min_value=1,
+            max_value=100,
+            value=10,
+        )
+
+        if st.button(t("calculate"), key="power_calc"):
+            st.session_state.power_result = (
+                math.ceil(bulb_watts / pokemon_watts)
+            )
+            award_xp("power")
+
+    with right:
+        result = getattr(st.session_state, "power_result", None)
+
+        if result is not None:
+            st.metric("Pokémon needed", result)
+
+            st.markdown(
+                f"""
+                <div class="formula-box">
+                <b>Step 1:</b> Bulb power = {bulb_watts} W<br>
+                <b>Step 2:</b> Assumed power per Pokémon = {pokemon_watts} W<br>
+                <b>Step 3:</b> Divide {bulb_watts} by {pokemon_watts}.<br>
+                <b>Step 4:</b> Round up to a whole Pokémon.<br>
+                <b>Result:</b> {result} Pokémon.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            st.latex(
+                rf"N = \left\lceil "
+                rf"\frac{{{bulb_watts}}}{{{pokemon_watts}}}"
+                rf"\right\rceil = {result}"
+            )
+
+        st.warning(
+            "This is a fictional educational model. The power assigned "
+            "to each Pokémon is an adjustable assumption, not a real "
+            "scientific measurement."
+        )
+
+
+# ============================================================
+# MONTE CARLO PI LAB
+# ============================================================
+
+elif page == "pi":
+    st.title("🎯 Monte Carlo π Laboratory")
+
+    st.write(
+        "Estimate π by throwing random points into a square "
+        "containing a quarter-circle."
+    )
+
+    trials = st.slider(
+        t("trials"),
+        min_value=100,
+        max_value=10000,
+        value=2000,
+        step=100,
+    )
+
+    if st.button(t("run"), key="run_pi"):
+        rng = np.random.default_rng()
+
+        x = rng.random(trials)
+        y = rng.random(trials)
+
+        inside = x**2 + y**2 <= 1
+        count_inside = int(np.sum(inside))
+
+        estimate = 4 * count_inside / trials
+
+        st.session_state.last_pi = {
+            "estimate": estimate,
+            "trials": trials,
+            "inside": count_inside,
+            "x": x,
+            "y": y,
+            "inside_mask": inside,
+        }
+
+        award_xp("pi")
+
+    data = st.session_state.last_pi
+
+    if data is not None:
+        x = data["x"]
+        y = data["y"]
+        inside = data["inside_mask"]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric("Estimated π", f"{data['estimate']:.6f}")
+
+        with col2:
+            st.metric("Actual π", f"{math.pi:.6f}")
+
+        fig, ax = plt.subplots(figsize=(7, 6))
+
+        ax.scatter(
+            x[inside],
+            y[inside],
+            s=8,
+            alpha=0.65,
+            label="Inside quarter-circle",
+        )
+
+        ax.scatter(
+            x[~inside],
+            y[~inside],
+            s=8,
+            alpha=0.65,
+            label="Outside quarter-circle",
+        )
+
+        theta = np.linspace(0, np.pi / 2, 300)
+
+        ax.plot(
+            np.cos(theta),
+            np.sin(theta),
+            linewidth=2,
+            label="Quarter-circle boundary",
+        )
+
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_aspect("equal")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_title("Monte Carlo experiment")
+        ax.legend()
+
+        st.pyplot(fig)
+        plt.close(fig)
+
+        st.markdown(f"### {t('steps')}")
+
+        st.markdown(
+            f"""
+            **1. Generate random points**
+
+            Each point has coordinates x and y between 0 and 1.
+
+            **2. Test whether a point is inside the quarter-circle**
+
+            A point is inside when:
+
+            x² + y² ≤ 1
+
+            **3. Find the proportion inside**
+
+            - Total points: {data['trials']}
+            - Points inside: {data['inside']}
+
+            **4. Estimate π**
+
+            The area of the quarter-circle is π/4, while the square's
+            area is 1. The fraction of random points inside therefore
+            approximates π/4.
+
+            Multiply that fraction by 4:
+
+            π ≈ 4 × (inside points / total points)
+
+            **5. Interpret the result**
+
+            Random variation means this estimate may differ from π.
+            More points often improve the estimate, but improvement
+            is not guaranteed in every individual run.
+            """
+        )
+
+        st.latex(
+            rf"\pi \approx 4 \times "
+            rf"\frac{{{data['inside']}}}{{{data['trials']}}}"
+            rf" = {data['estimate']:.6f}"
+        )
+
+        st.caption(
+            f"Absolute error in this run: "
+            f"{abs(data['estimate'] - math.pi):.6f}"
+        )
+
+
+# ============================================================
+# 4D SPHERE LAB
+# ============================================================
+
+elif page == "sphere":
+    st.title("🌌 Four-Dimensional Sphere Laboratory")
+
+    st.write(
+        "Estimate the volume of a unit sphere in four dimensions "
+        "using random sampling."
+    )
+
+    st.markdown(
+        """
+        In 2D, a circle is described by x² + y² ≤ 1.
+
+        In 3D, a sphere is described by x² + y² + z² ≤ 1.
+
+        In 4D, we add another coordinate, w:
+
+        x² + y² + z² + w² ≤ 1.
+        """
+    )
+
+    trials = st.slider(
+        t("trials"),
+        min_value=1000,
+        max_value=50000,
+        value=10000,
+        step=1000,
+        key="sphere_trials",
+    )
+
+    if st.button(t("run"), key="run_sphere"):
+        rng = np.random.default_rng()
+
+        points = rng.uniform(-1, 1, size=(trials, 4))
+        inside = np.sum(points**2, axis=1) <= 1
+
+        count_inside = int(np.sum(inside))
+
+        # The 4D bounding hypercube has side length 2.
+        # Its volume is 2^4 = 16.
+        estimated_volume = 16 * count_inside / trials
+
+        st.session_state.sphere_result = {
+            "trials": trials,
+            "inside": count_inside,
+            "estimate": estimated_volume,
+            "points": points,
+            "inside_mask": inside,
+        }
+
+        award_xp("sphere")
+
+    result = getattr(st.session_state, "sphere_result", None)
+
+    if result is not None:
+        exact_volume = math.pi**2 / 2
+
+        a, b = st.columns(2)
+
+        with a:
+            st.metric(
+                "Estimated volume",
+                f"{result['estimate']:.5f}",
+            )
+
+        with b:
+            st.metric(
+                "Exact volume",
+                f"{exact_volume:.5f}",
+            )
+
+        points = result["points"]
+        inside = result["inside_mask"]
+
+        fig, ax = plt.subplots(figsize=(7, 6))
+
+        ax.scatter(
+            points[inside, 0],
+            points[inside, 1],
+            s=5,
+            alpha=0.45,
+            label="Inside the 4D sphere",
+        )
+
+        ax.scatter(
+            points[~inside, 0],
+            points[~inside, 1],
+            s=5,
+            alpha=0.2,
+            label="Outside the 4D sphere",
+        )
+
+        ax.set_xlabel("x coordinate")
+        ax.set_ylabel("y coordinate")
+        ax.set_title("2D projection of sampled 4D points")
+        ax.legend()
+
+        st.pyplot(fig)
+        plt.close(fig)
+
+        st.markdown(f"### {t('steps')}")
+
+        st.markdown(
+            f"""
+            **Step 1 — Sample the 4D box**
+
+            Generate points with x, y, z and w between -1 and 1.
+
+            **Step 2 — Check all four coordinates**
+
+            A point is inside when:
+
+            x² + y² + z² + w² ≤ 1
+
+            **Step 3 — Estimate the fraction inside**
+
+            - Total samples: {result['trials']}
+            - Samples inside: {result['inside']}
+
+            **Step 4 — Calculate the volume**
+
+            The surrounding 4D box has side length 2, so its volume is:
+
+            2⁴ = 16
+
+            Multiply 16 by the fraction of points inside the sphere.
+
+            **Important:** The graph shows only the x and y coordinates
+            of the sampled points. Whether a point is inside the sphere
+            is decided using all four coordinates.
+            """
+        )
+
+        st.latex(
+            rf"V \approx 16 \times "
+            rf"\frac{{{result['inside']}}}{{{result['trials']}}}"
+            rf" = {result['estimate']:.5f}"
+        )
+
+        st.latex(r"V_{\text{exact}} = \frac{\pi^2}{2}")
+
+        st.caption(
+            "Monte Carlo estimates vary between runs. "
+            "Increasing the number of samples often improves accuracy."
+        )
+
+
+# ============================================================
+# FUNCTION LAB
+# ============================================================
+
+elif page == "functions":
+    st.title("📈 Function Laboratory")
+
+    st.write(
+        "Change the mathematical function and explore its graph."
+    )
+
+    choices = {
+        "x²": lambda x: x**2,
+        "x³": lambda x: x**3,
+        "sin(x)": lambda x: np.sin(x),
+        "cos(x)": lambda x: np.cos(x),
+        "eˣ": lambda x: np.exp(np.clip(x, -20, 20)),
+        "√|x|": lambda x: np.sqrt(np.abs(x)),
+    }
+
+    name = st.selectbox("Choose a function", list(choices.keys()))
+
+    x_min = st.slider("Minimum x", -10, -1, -5)
+    x_max = st.slider("Maximum x", 1, 10, 5)
+
+    x = np.linspace(x_min, x_max, 500)
+    y = choices[name](x)
+
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+
+    ax.plot(x, y, linewidth=2.5)
+    ax.axhline(0, linewidth=1)
+    ax.axvline(0, linewidth=1)
+    ax.set_xlabel("x")
+    ax.set_ylabel("f(x)")
+    ax.set_title(f"Graph of f(x) = {name}")
+    ax.grid(True, alpha=0.25)
+
+    st.pyplot(fig)
+    plt.close(fig)
+
+    st.markdown("### Understanding the graph")
+
+    explanations = {
+        "x²": (
+            "Squaring a number makes its result non-negative. "
+            "The graph is a U-shaped parabola."
+        ),
+        "x³": (
+            "Cubing preserves the sign of x. Negative x values "
+            "produce negative y values."
+        ),
+        "sin(x)": (
+            "The sine function oscillates between -1 and 1."
+        ),
+        "cos(x)": (
+            "Cosine also oscillates between -1 and 1, "
+            "but its value at x = 0 is 1."
+        ),
+        "eˣ": (
+            "The exponential function grows rapidly for positive x "
+            "and approaches zero for very negative x."
+        ),
+        "√|x|": (
+            "The square root is applied to the absolute value, "
+            "so the output is defined for every real x."
+        ),
+    }
+
+    st.info(explanations[name])
+
+    st.markdown("### Try a value")
+
+    value = st.number_input("Enter x", value=2.0)
+
+    st.metric("f(x)", f"{float(choices[name](np.array([value]))[0]):.6f}")
+
+    st.latex(r"y = f(x)")
+
+
+# ============================================================
+# PHYSICS LAB
+# ============================================================
+
+elif page == "physics":
+    st.title("🔌 Physics Laboratory")
+
+    st.write("Experiment with Ohm's law and electrical power.")
+
+    voltage = st.slider(
+        t("voltage"),
+        min_value=1,
+        max_value=240,
+        value=12,
+    )
+
+    resistance = st.slider(
+        t("resistance"),
+        min_value=1,
+        max_value=100,
+        value=4,
+    )
+
+    current = voltage / resistance
+    power = voltage * current
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.metric("Current", f"{current:.3f} A")
+
+    with c2:
+        st.metric("Electrical power", f"{power:.3f} W")
+
+    st.markdown(f"### {t('steps')}")
+
+    st.markdown(
+        f"""
+        **Step 1 — Write Ohm's law**
+
+        Current equals voltage divided by resistance.
+
+        **Step 2 — Substitute the values**
+
+        Voltage = {voltage} V
+
+        Resistance = {resistance} Ω
+
+        **Step 3 — Calculate current**
+
+        {voltage} ÷ {resistance} = {current:.3f} A
+
+        **Step 4 — Calculate electrical power**
+
+        Power = voltage × current
+
+        {voltage} × {current:.3f} = {power:.3f} W
+        """
+    )
+
+    st.latex(r"I = \frac{V}{R}")
+
+    st.latex(r"P = VI")
+
+
+# ============================================================
 # MATH ARCADE
-# =====================================================
+# ============================================================
 
-elif page == t("math"):
+elif page == "math":
+    st.title("🧠 Math Arcade")
 
-    st.title(t("math"))
+    st.write(
+        "Solve a challenge, understand the reasoning and earn XP."
+    )
 
-    st.markdown("""
-    <div class="lesson">
-    <b>🧠 The idea</b><br>
-    A calculator gives an answer. A mathematician asks why.
-    Try an expression, calculate it, and then inspect its structure.
-    </div>
-    """, unsafe_allow_html=True)
+    questions = [
+        {
+            "question": "What is 12 × 8?",
+            "answer": 96,
+            "explanation": (
+                "12 × 8 means eight groups of twelve. "
+                "10 × 8 = 80 and 2 × 8 = 16. "
+                "80 + 16 = 96."
+            ),
+        },
+        {
+            "question": "What is 15²?",
+            "answer": 225,
+            "explanation": (
+                "15² means 15 × 15. "
+                "15 × 10 = 150 and 15 × 5 = 75. "
+                "150 + 75 = 225."
+            ),
+        },
+        {
+            "question": "What is √144?",
+            "answer": 12,
+            "explanation": (
+                "The square root of 144 is the positive number "
+                "that multiplied by itself gives 144. "
+                "12 × 12 = 144."
+            ),
+        },
+        {
+            "question": "A 60 W bulb uses 12 V. What current flows?",
+            "answer": 5,
+            "explanation": (
+                "Power P = VI. Rearrange to I = P/V. "
+                "Substitute: 60/12 = 5 amperes."
+            ),
+        },
+    ]
+
+    index = st.selectbox(
+        "Choose a challenge",
+        range(len(questions)),
+        format_func=lambda i: f"Challenge {i + 1}",
+    )
+
+    q = questions[index]
+
+    st.markdown(
+        f"""
+        <div class="lab-card">
+            <h3>{q['question']}</h3>
+            <p>Work it out before revealing the solution.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    answer = st.number_input(
+        t("your_answer"),
+        value=0.0,
+        step=1.0,
+        key=f"answer_{index}",
+    )
+
+    if st.button(t("check"), key=f"check_{index}"):
+        if math.isclose(answer, q["answer"], abs_tol=0.0001):
+            st.success(t("correct"))
+            award_xp(f"math_{index}", 15)
+        else:
+            st.warning(t("incorrect"))
+
+        st.markdown("### Solution")
+
+        st.write(q["explanation"])
+
+        st.markdown(f"**Answer: {q['answer']}**")
+
+
+# ============================================================
+# SAFE CALCULATOR
+# ============================================================
+
+def safe_calculate(expression):
+    allowed_binary = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.Mod: operator.mod,
+    }
+
+    allowed_unary = {
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+    }
+
+    allowed_functions = {
+        "sqrt": math.sqrt,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "log": math.log,
+        "abs": abs,
+    }
+
+    constants = {
+        "pi": math.pi,
+        "e": math.e,
+    }
+
+    def evaluate(node):
+        if isinstance(node, ast.Expression):
+            return evaluate(node.body)
+
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)):
+                return node.value
+            raise ValueError("Only numeric constants are allowed.")
+
+        if isinstance(node, ast.BinOp):
+            op_type = type(node.op)
+
+            if op_type not in allowed_binary:
+                raise ValueError("Unsupported operator.")
+
+            left = evaluate(node.left)
+            right = evaluate(node.right)
+
+            if op_type is ast.Pow and abs(right) > 100:
+                raise ValueError("Exponent is too large.")
+
+            return allowed_binary[op_type](left, right)
+
+        if isinstance(node, ast.UnaryOp):
+            op_type = type(node.op)
+
+            if op_type not in allowed_unary:
+                raise ValueError("Unsupported unary operator.")
+
+            return allowed_unary[op_type](evaluate(node.operand))
+
+        if isinstance(node, ast.Name):
+            if node.id in constants:
+                return constants[node.id]
+
+            raise ValueError("Unknown name.")
+
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, ast.Name):
+                raise ValueError("Unsupported function call.")
+
+            name = node.func.id
+
+            if name not in allowed_functions:
+                raise ValueError("Function not allowed.")
+
+            if len(node.args) != 1 or node.keywords:
+                raise ValueError("Use one argument per function.")
+
+            return allowed_functions[name](evaluate(node.args[0]))
+
+        raise ValueError("Unsupported expression.")
+
+    tree = ast.parse(expression, mode="eval")
+    result = evaluate(tree)
+
+    if isinstance(result, complex):
+        raise ValueError("Complex results are not supported.")
+
+    if not math.isfinite(float(result)):
+        raise ValueError("The result is not finite.")
+
+    return result
+
+
+elif_placeholder = None
+
+Önemli: Yukarıdaki kodun sonundaki "elif_placeholder = None" satırından sonra aşağıdaki bölümü de aynı "app.py" dosyasına ekle. Bu bölüm hesap makinesini ve proje hakkında sayfasını tamamlar.
+
+# ============================================================
+# CALCULATOR
+# ============================================================
+
+if page == "calculator":
+    st.title("🧮 Mathematical Calculation Engine")
+
+    st.write(
+        "Use arithmetic, powers and selected mathematical functions."
+    )
+
+    st.caption(
+        "Examples: 50 * 3 + sqrt(400) | sin(pi / 2) | log(e)"
+    )
 
     expression = st.text_input(
         t("expression"),
         value="50 * 3 + sqrt(400)",
     )
 
-    st.caption(
-        "Supported: +, -, *, /, **, sqrt(), sin(), cos(), tan(), log(), pi, e"
-    )
-
-    if st.button(t("calculate"), key="calculate_math"):
+    if st.button(t("solve"), key="calculate_expression"):
         try:
-            result = safe_eval(expression)
+            result = safe_calculate(expression)
 
-            st.success(f"{t('result')}: {result:,.8g}")
+            st.metric(t("result"), f"{result:.8g}")
 
-            st.markdown(f"### {t('steps')}")
-
-            st.write("**Step 1 — Identify the operations.**")
-            st.code(expression)
+            st.markdown("### Calculation notes")
 
             st.write(
-                "**Step 2 — Follow the order of operations.** "
-                "Brackets and functions are evaluated before "
-                "multiplication, division, addition and subtraction."
+                "The calculator parses the expression and evaluates "
+                "the supported operations. Parentheses and operator "
+                "precedence determine the order of calculations."
             )
 
-            st.write(
-                "**Step 3 — Evaluate the expression.** "
-                "The calculator applies the supported mathematical "
-                "operations to produce the result."
+            st.latex(
+                r"\text{Result} = "
+                + str(result)
             )
 
-            st.write(f"**Step 4 — Final result:** `{result:,.8g}`")
+            award_xp("calculator")
 
-            st.caption(
-                "Note: these are general solution steps. "
-                "For complex expressions, expand the expression into "
-                "smaller operations to inspect each intermediate value."
-            )
-
-            award_xp("math_calculator", 10)
-
-            st.session_state.history.append(
-                f"{expression} = {result}"
-            )
-
-        except Exception:
-            st.error(t("error"))
-
-    st.markdown("### 🎯 Your turn")
-
-    challenges = {
-        "What is 12²?": "144",
-        "What is √225?": "15",
-        "What is 7 × 8?": "56",
-        "What is 2³ + 4?": "12",
-    }
-
-    challenge = st.selectbox(
-        "Choose a challenge",
-        list(challenges.keys()),
-    )
-
-    answer = st.text_input("Your answer", key="challenge_answer")
-
-    if st.button("Check answer", key="check_answer"):
-        if answer.strip() == challenges[challenge]:
-            st.success("Correct! You understood the calculation.")
-            award_xp("challenge_" + challenge, 10)
-        else:
-            st.warning("Try again. Break the problem into smaller steps.")
-
-    if st.session_state.history:
-        with st.expander("📓 Calculation history"):
-            for item in reversed(st.session_state.history[-10:]):
-                st.write(item)
+        except (ValueError, TypeError, SyntaxError, ZeroDivisionError,
+                OverflowError) as error:
+            st.error(f"Could not calculate this expression: {error}")
 
 
-# =====================================================
-# FUNCTION LAB
-# =====================================================
+# ============================================================
+# ABOUT
+# ============================================================
 
-elif page == t("functions"):
-
-    st.title(t("functions"))
-
-    st.markdown("""
-    <div class="lesson">
-    <b>🧠 What is a function?</b><br>
-    A function takes an input x and produces an output y.
-    The graph shows how that output changes as x changes.
-    </div>
-    """, unsafe_allow_html=True)
-
-    function = st.selectbox(
-        t("function"),
-        ["x²", "x³", "sin(x)", "cos(x)", "eˣ", "√|x|"],
-    )
-
-    limit = st.slider("Explore the x-axis", 2, 15, 5)
-
-    x = np.linspace(-limit, limit, 500)
-
-    if function == "x²":
-        y = x**2
-        formula = "f(x) = x²"
-        explanation = (
-            "Each output is the input multiplied by itself. "
-            "For example, f(3) = 3² = 9."
-        )
-    elif function == "x³":
-        y = x**3
-        formula = "f(x) = x³"
-        explanation = (
-            "The input is multiplied by itself three times. "
-            "Negative inputs produce negative outputs."
-        )
-    elif function == "sin(x)":
-        y = np.sin(x)
-        formula = "f(x) = sin(x)"
-        explanation = (
-            "The sine function oscillates between -1 and 1. "
-            "The input angle is measured in radians."
-        )
-    elif function == "cos(x)":
-        y = np.cos(x)
-        formula = "f(x) = cos(x)"
-        explanation = (
-            "Cosine is periodic and oscillates between -1 and 1. "
-            "It begins at 1 when x = 0."
-        )
-    elif function == "eˣ":
-        y = np.exp(np.clip(x, -20, 20))
-        formula = "f(x) = eˣ"
-        explanation = (
-            "The exponential function grows rapidly for positive x "
-            "and approaches zero as x becomes very negative."
-        )
-    else:
-        y = np.sqrt(np.abs(x))
-        formula = "f(x) = √|x|"
-        explanation = (
-            "Take the absolute value first, then its square root. "
-            "This keeps the output real for every real input."
-        )
-
-    st.latex(formula)
-
-    fig, ax = plt.subplots()
-    ax.plot(x, y, linewidth=2)
-    ax.axhline(0, linewidth=0.8)
-    ax.axvline(0, linewidth=0.8)
-    ax.grid(True, alpha=0.3)
-    ax.set_xlabel("Input x")
-    ax.set_ylabel("Output f(x)")
-    ax.set_title(formula)
-    st.pyplot(fig)
-    plt.close(fig)
-
-    st.markdown(f"### {t('steps')}")
-    st.write("1. Choose an input value x.")
-    st.write("2. Apply the rule shown in the formula.")
-    st.write("3. The result is the corresponding y-value.")
-    st.write("4. Repeat for many x-values to draw the curve.")
-    st.info(explanation)
-
-    test_x = st.number_input("Try your own x-value", value=2.0)
-
-    if function == "x²":
-        test_y = test_x**2
-    elif function == "x³":
-        test_y = test_x**3
-    elif function == "sin(x)":
-        test_y = math.sin(test_x)
-    elif function == "cos(x)":
-        test_y = math.cos(test_x)
-    elif function == "eˣ":
-        test_y = math.exp(max(-20, min(20, test_x)))
-    else:
-        test_y = math.sqrt(abs(test_x))
-
-    st.success(f"f({test_x}) = {test_y:.6f}")
-
-    if st.button("Complete function mission"):
-        award_xp("function_lab", 10)
-
-
-# =====================================================
-# PHYSICS LAB
-# =====================================================
-
-elif page == t("physics"):
-
-    st.title(t("physics"))
-
-    st.markdown("""
-    <div class="lesson">
-    <b>⚡ Mission: power the laboratory</b><br>
-    Change the voltage and resistance. Observe what happens to
-    the electric current and power.
-    </div>
-    """, unsafe_allow_html=True)
-
-    voltage = st.slider(t("voltage"), 0.0, 240.0, 12.0)
-    resistance = st.slider(t("resistance"), 1.0, 1000.0, 4.0)
-
-    current = voltage / resistance
-    power = voltage * current
-
-    a, b, c = st.columns(3)
-    a.metric("Voltage", f"{voltage:.2f} V")
-    b.metric("Current", f"{current:.3f} A")
-    c.metric("Power", f"{power:.3f} W")
-
-    st.markdown(f"### {t('steps')}")
-
-    st.write("**Step 1 — Start with Ohm's law.**")
-    st.latex(r"I = \frac{V}{R}")
-
-    st.write("**Step 2 — Substitute the selected values.**")
-    st.latex(
-        rf"I = \frac{{{voltage:.2f}}}{{{resistance:.2f}}}"
-    )
-
-    st.write("**Step 3 — Calculate the current.**")
-    st.latex(rf"I = {current:.4f}\ \mathrm{{A}}")
-
-    st.write("**Step 4 — Calculate electrical power.**")
-    st.latex(r"P = VI")
-
-    st.latex(
-        rf"P = {voltage:.2f}\times {current:.4f}"
-        rf" = {power:.4f}\ \mathrm{{W}}"
-    )
-
-    st.info(
-        "For a fixed voltage, increasing resistance reduces current. "
-        "Power is calculated here using P = VI for the selected "
-        "idealized circuit."
-    )
-
-    if st.button("Complete physics mission"):
-        award_xp("physics_lab", 10)
-
-
-# =====================================================
-# POKEMON ENERGY LAB
-# =====================================================
-
-elif page == t("pokemon"):
-
-    st.title(t("pokemon"))
+elif page == "about":
+    st.title("🔬 About Tom Lab")
 
     st.markdown(
-        '<div style="font-size:60px;text-align:center">'
-        '⚡ 🐉 🔥 ✨</div>',
-        unsafe_allow_html=True,
+        """
+        ## Learning through experiments
+
+        Tom Lab is an independent educational project exploring
+        mathematics, physics, probability and scientific modelling.
+
+        It includes interactive experiments, visualizations and
+        explanations designed to help learners understand the
+        reasoning behind mathematical results.
+
+        ### Educational principles
+
+        - Explain the formula.
+        - Show how values are substituted.
+        - Visualize the result where possible.
+        - Distinguish a mathematical model from a real-world measurement.
+        - Encourage experimentation and critical thinking.
+
+        ### A note about the project
+
+        This is an independent fan-made educational project inspired
+        by mathematics and science communication. It is not an official
+        Professor Tom Crawford project and is not endorsed by him.
+
+        Pokémon characters and names belong to their respective
+        rights holders. This project is not affiliated with or
+        endorsed by The Pokémon Company or Nintendo.
+        """
     )
 
-    st.write(
-        "Build a fictional Pokémon energy model. "
-        "These values are assumptions for a learning exercise, "
-        "not official measurements of Pokémon."
-    )
+    st.divider()
 
-    pokemon = st.selectbox(
-        "Choose a Pokémon",
-        ["Pikachu", "Charizard", "Eevee", "Gengar"],
-    )
+    st.markdown(
+        """
+        **Built with:** Python, Streamlit, NumPy and Matplotlib.
 
-    bulb = st.slider(t("bulb"), 1, 200, 10)
-    pokemon_power = st.slider(
-        t("pikachu"), 1, 1000, 100
-    )
-
-    count = math.ceil(bulb / pokemon_power)
-    supplied = count * pokemon_power
-
-    a, b = st.columns(2)
-    a.metric("Bulb power", f"{bulb} W")
-    b.metric("Pokémon needed", count)
-
-    st.markdown(f"### {t('steps')}")
-
-    st.write("**Step 1 — Define the model.**")
-    st.write(
-        f"We assume each {pokemon} can supply "
-        f"{pokemon_power} watts."
-    )
-
-    st.write("**Step 2 — Divide the required power by one Pokémon's power.**")
-    st.latex(
-        rf"\frac{{{bulb}\ \mathrm{{W}}}}"
-        rf"{{{pokemon_power}\ \mathrm{{W}}}}"
-        rf" = {bulb / pokemon_power:.4f}"
-    )
-
-    st.write("**Step 3 — Use a whole number of Pokémon.**")
-    st.write(
-        "Round up, because a fraction of a Pokémon is not allowed "
-        "in this simplified model."
-    )
-
-    st.latex(
-        rf"N = \left\lceil \frac{{{bulb}}}"
-        rf"{{{pokemon_power}}} \right\rceil = {count}"
-    )
-
-    st.write("**Step 4 — Check the supplied power.**")
-    st.write(
-        f"{count} × {pokemon_power} W = {supplied} W."
-    )
-
-    st.info(
-        "Scientific thinking: the mathematics follows from the "
-        "assumptions. The assumptions themselves are fictional."
-    )
-
-    if st.button("Complete energy mission"):
-        award_xp("pokemon_energy", 15)
-
-
-# =====================================================
-# PROBABILITY ARENA
-# =====================================================
-
-elif page == t("probability"):
-
-    st.title(t("probability"))
-
-    st.markdown("""
-    <div class="lesson">
-    <b>🎲 Theory versus experiment</b><br>
-    Probability predicts what should happen in the long run.
-    A simulation shows what happens in one particular experiment.
-    </div>
-    """, unsafe_allow_html=True)
-
-    probability = st.slider("Success probability (%)", 0, 100, 50)
-    trials = st.slider("Number of trials", 10, 10000, 1000, step=10)
-
-    seed = st.number_input(
-        "Random seed", 0, 999999, 42,
-        key="probability_seed",
-    )
-
-    if st.button("Run probability experiment"):
-
-        rng = np.random.default_rng(int(seed))
-        outcomes = rng.random(trials) < probability / 100
-
-        successes = int(np.sum(outcomes))
-        failures = trials - successes
-        observed = successes / trials * 100
-
-        a, b, c = st.columns(3)
-        a.metric("Expected probability", f"{probability}%")
-        b.metric("Observed probability", f"{observed:.2f}%")
-        c.metric("Successes", successes)
-
-        st.markdown(f"### {t('steps')}")
-
-        st.write("**Step 1 — Convert the percentage to a probability.**")
-        st.latex(
-            rf"p = \frac{{{probability}}}{{100}}"
-            rf" = {probability / 100:.4f}"
+        **Goal:** Make mathematical ideas easier to explore.
+        """
         )
-
-        st.write(
-            "**Step 2 — Generate a random outcome for each trial.** "
-            "Each trial succeeds with probability p."
-        )
-
-        st.write("**Step 3 — Count the successful trials.**")
-        st.latex(
-            rf"\text{{Observed probability}}"
-            rf" = \frac{{{successes}}}{{{trials}}}"
-            rf" = {successes / trials:.5f}"
-        )
-
-        st.write("**Step 4 — Compare theory and experiment.**")
-        st.write(
-            f"The theoretical probability is {probability}%, "
-            f"while this simulation produced {observed:.2f}%."
-        )
-
-        fig, ax = plt.subplots()
-        ax.bar(["Success", "Failure"], [successes, failures])
-        ax.set_ylabel("Number of trials")
-        ax.set_title("Simulation results")
-        st.pyplot(fig)
-        plt.close(fig)
-
-        st.info(
-            "The simulated result does not have to equal the "
-            "theoretical probability. Random variation is normal; "
-            "larger samples often give more stable estimates."
-        )
-
-        award_xp("probability_lab", 15)
-
-
-# =====================================================
-# MONTE CARLO PI
-# =====================================================
-
-elif page == t("pi"):
-
-    st.title(t("pi"))
-
-    st.markdown("""
-    <div class="lesson">
-    <b>🎯 The big idea</b><br>
-    We can estimate π without measuring a circle's circumference.
-    We throw random points into a square and count how many land
-    inside a circle drawn within it.
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### Step 1 — Understand the geometry")
-
-    st.write(
-        "Imagine a circle of radius 1 inside a square of side length 2."
-    )
-
-    st.latex(r"A_{\text{circle}} = \pi r^2 = \pi")
-    st.latex(r"A_{\text{square}} = 2\times2 = 4")
-
-    st.write("The fraction of the square covered by the circle is:")
-
-    st.latex(
-        r"\frac{A_{\text{circle}}}{A_{\text{square}}}"
-        r" = \frac{\pi}{4}"
-    )
-
-    st.markdown("### Step 2 — Throw random points")
-
-    n = st.slider(t("points"), 100, 20000, 3000, step=100)
-
-    seed = st.number_input(
-        "Random seed", 0, 999999, 42,
-        key="pi_seed",
-    )
-
-    if st.button(t("run"), key="run_pi"):
-
-        rng = np.random.default_rng(int(seed))
-
-        x = rng.uniform(-1, 1, n)
-        y = rng.uniform(-1, 1, n)
-
-        # A point is inside the unit circle if x² + y² <= 1.
-        inside_mask = x**2 + y**2 <= 1
-
-        inside = int(np.sum(inside_mask))
-        outside = n - inside
-
-        fraction = inside / n
-        estimate = 4 * fraction
-        error = abs(estimate - math.pi)
-
-        st.markdown("### Step 3 — See the experiment")
-
-        fig, ax = plt.subplots(figsize=(7, 7))
-
-        ax.scatter(
-            x[inside_mask],
-            y[inside_mask],
-            s=7,
-            alpha=0.65,
-            label=f"Inside circle: {inside}",
-        )
-
-        ax.scatter(
-            x[~inside_mask],
-            y[~inside_mask],
-            s=7,
-            alpha=0.5,
-            label=f"Outside circle: {outside}",
-        )
-
-        circle = plt.Circle(
-            (0, 0), 1, fill=False, linewidth=2
-        )
-        ax.add_patch(circle)
-
-        ax.set_xlim(-1.05, 1.05)
-        ax.set_ylim(-1.05, 1.05)
-        ax.set_aspect("equal")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_title("Monte Carlo estimation of π")
-        ax.legend()
-
-        st.pyplot(fig)
-        plt.close(fig)
-
-        st.markdown("### Step 4 — Calculate the estimate")
-
-        a, b, c = st.columns(3)
-        a.metric("Points inside", inside)
-        b.metric("Total points", n)
-        c.metric("Estimated π", f"{estimate:.6f}")
-
-        st.write("First, calculate the fraction of points inside the circle.")
-
-        st.latex(
-            rf"\frac{{N_{{\mathrm{{inside}}}}}}"
-            rf"{{N_{{\mathrm{{total}}}}}}"
-            rf" = \frac{{{inside}}}{{{n}}}"
-            rf" = {fraction:.6f}"
-        )
-
-        st.write("Next, use the geometric relationship to estimate π.")
-
-        st.latex(
-            rf"\pi \approx 4\times"
-            rf"\frac{{{inside}}}{{{n}}}"
-            rf" = {estimate:.6f}"
-        )
-
-        st.write("Finally, compare the estimate with the actual value.")
-
-        st.latex(
-            rf"\pi \approx 3.14159265,\qquad"
-            rf"\text{{absolute error}} = {error:.6f}"
-        )
-
-        st.info(
-            "Why does this work? The circle occupies π/4 of the "
-            "square's area. With many uniformly distributed random "
-            "points, the fraction landing inside the circle tends "
-            "to approach π/4."
-        )
-
-        st.markdown("### 🎯 Experiment challenge")
-
-        st.write(
-            "Run the simulation with 100, 1,000, and 10,000 points. "
-            "Compare the estimates and see how the results change."
-        )
-
-        award_xp("monte_carlo_pi", 20)
-
-
-# =====================================================
-# 4D SPHERE MONTE CARLO
-# =====================================================
-
-elif page == t("sphere"):
-
-    st.title(t("sphere"))
-
-    st.markdown("""
-    <div class="lesson">
-    <b>🌐 Can we estimate the volume of a shape we cannot directly see?</b><br>
-    Yes! Monte Carlo methods also work in higher dimensions.
-    We cannot draw a four-dimensional sphere on an ordinary screen,
-    but we can sample four-dimensional points and test which ones
-    lie inside the sphere.
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("### Step 1 — Define the 4D sphere")
-
-    st.write(
-        "A point (x₁, x₂, x₃, x₄) lies inside the unit 4D sphere when:"
-    )
-
-    st.latex(
-        r"x_1^2+x_2^2+x_3^2+x_4^2 \leq 1"
-    )
-
-    st.write(
-        "We sample points inside a four-dimensional cube whose "
-        "coordinates range from -1 to 1."
-    )
-
-    st.latex(r"V_{\text{hypercube}} = 2^4 = 16")
-
-    st.markdown("### Step 2 — Choose the sample size")
-
-    n = st.slider(
-        "Number of 4D samples",
-        1000, 50000, 10000, step=1000,
-    )
-
-    seed = st.number_input(
-        "Random seed",
-        0, 999999, 42,
-        key="sphere_seed",
-    )
-
-    if st.button("Explore the 4D universe"):
-
-        rng = np.random.default_rng(int(seed))
-
-        points = rng.uniform(-1, 1, size=(n, 4))
-
-        squared_distance = np.sum(points**2, axis=1)
-        inside_mask = squared_distance <= 1
-
-        inside = int(np.sum(inside_mask))
-        fraction = inside / n
-
-        # The 4D cube has volume 16.
-        estimate = 16 * fraction
-
-        # The exact volume of a unit 4D ball is pi² / 2.
-        theoretical = math.pi**2 / 2
-
-        error = abs(estimate - theoretical)
-
-        st.markdown("### Step 3 — Visualize a projection")
-
-        st.write(
-            "The plot shows only coordinates x₁ and x₂. "
-            "The classification still uses all four coordinates."
-        )
-
-        fig, ax = plt.subplots(figsize=(7, 7))
-
-        ax.scatter(
-            points[~inside_mask, 0],
-            points[~inside_mask, 1],
-            s=5,
-            alpha=0.2,
-            label="Outside 4D sphere",
-        )
-
-        ax.scatter(
-            points[inside_mask, 0],
-            points[inside_mask, 1],
-            s=5,
-            alpha=0.5,
-            label="Inside 4D sphere",
-        )
-
-        ax.set_xlabel("Coordinate x₁")
-        ax.set_ylabel("Coordinate x₂")
-        ax.set_title("2D projection of 4D samples")
-        ax.legend()
-
-        st.pyplot(fig)
-        plt.close(fig)
-
-        st.markdown("### Step 4 — Estimate the volume")
-
-        a, b, c = st.columns(3)
-        a.metric("Points inside", inside)
-        b.metric("Estimated volume", f"{estimate:.5f}")
-        c.metric("Theoretical volume", f"{theoretical:.5f}")
-
-        st.write("First, calculate the fraction of points inside.")
-
-        st.latex(
-            rf"f = \frac{{{inside}}}{{{n}}}"
-            rf" = {fraction:.6f}"
-        )
-
-        st.write(
-            "Next, multiply this fraction by the volume of the "
-            "surrounding 4D hypercube."
-        )
-
-        st.latex(
-            rf"V_{{\mathrm{{estimate}}}}"
-            rf" = 16\times\frac{{{inside}}}{{{n}}}"
-            rf" = {estimate:.5f}"
-        )
-
-        st.write("Compare the estimate with the exact mathematical result.")
-
-        st.latex(
-            r"V_4 = \frac{\pi^2}{2}"
-        )
-
-        st.latex(
-            rf"V_4 \approx {theoretical:.5f},\qquad"
-            rf"\text{{absolute error}} = {error:.5f}"
-        )
-
-        st.info(
-            "The simulation estimates the volume. It will generally "
-            "not match the exact value perfectly because it uses a "
-            "finite random sample. More samples can improve the "
-            "estimate, but do not guarantee that every run is more accurate."
-        )
-
-        st.markdown("### 🧠 Why is this interesting?")
-
-        st.write(
-            "The same idea works in 2D, 3D, 4D, and higher dimensions: "
-            "sample points in a known region, count the fraction "
-            "inside the target shape, and multiply by the region's volume."
-        )
-
-        award_xp("four_dimensional_sphere", 20)
-
-
-# =====================================================
-# ABOUT
-# =====================================================
-
-elif page == t("about"):
-
-    st.title(t("about"))
-
-    st.markdown("""
-    ## Learn by experimenting
-
-    Tom Lab is an independent educational project designed to make
-    mathematics and science interactive and approachable.
-
-    ### Learning principles
-
-    - **Visualize:** See what the mathematics describes.
-    - **Calculate:** Work through the formulas.
-    - **Understand:** Read the reasoning behind the result.
-    - **Experiment:** Change parameters and compare outcomes.
-    - **Reflect:** Think about why the result changes.
-
-    The project includes mathematics, physics, probability,
-    Monte Carlo estimation, higher-dimensional geometry, and
-    fictional Pokémon-inspired models.
-
-    This is an independent fan-made educational project.
-    It is not an official Professor Tom Crawford project and is
-    not endorsed by him.
-    """)
-
-    st.markdown("### 🏆 Your achievements")
-
-    if st.session_state.completed:
-        for mission in st.session_state.completed:
-            st.write("✅ " + mission)
-    else:
-        st.info("Complete an experiment to earn your first achievement!")
-
-    st.metric("Total XP", st.session_state.xp)
-
-
-# ---------------- FOOTER ----------------
-
-st.markdown("""
-<div class="footer">
-⚡ TOM LAB · LEARN BY EXPERIMENTING<br>
-Mathematics is not just something to calculate. It is something to discover.
-</div>
-""", unsafe_allow_html=True)
